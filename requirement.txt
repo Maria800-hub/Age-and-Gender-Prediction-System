@@ -1,0 +1,3 @@
+opencv-python>=4.5.1
+opencv-contrib-python>=4.5.1
+numpy>=1.19.5
