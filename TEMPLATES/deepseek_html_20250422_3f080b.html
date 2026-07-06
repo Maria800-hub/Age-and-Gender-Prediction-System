@@ -1,0 +1,276 @@
+<!-- templates/index.html -->
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Age and Gender Estimation</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            padding: 20px;
+            background-color: #f8f9fa;
+        }
+        .container {
+            max-width: 900px;
+        }
+        .image-container {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .image-box {
+            border: 1px solid #ddd;
+            padding: 10px;
+            background-color: white;
+            border-radius: 5px;
+            margin-bottom: 20px;
+        }
+        .image-box img {
+            max-width: 100%;
+            height: auto;
+        }
+        .results {
+            margin-top: 20px;
+        }
+        .webcam-container {
+            margin-top: 20px;
+            display: none;
+        }
+        #webcam {
+            max-width: 100%;
+            border: 1px solid #ddd;
+            background-color: #000;
+        }
+        #canvas {
+            position: absolute;
+            top: 0;
+            left: 0;
+        }
+        .webcam-wrapper {
+            position: relative;
+            display: inline-block;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1 class="text-center mb-4">Age and Gender Estimation</h1>
+        
+        <div class="card">
+            <div class="card-body">
+                <h5 class="card-title">Upload an Image</h5>
+                <form id="uploadForm">
+                    <div class="mb-3">
+                        <input class="form-control" type="file" id="fileInput" accept="image/*">
+                    </div>
+                    <button type="submit" class="btn btn-primary">Analyze Image</button>
+                    <button type="button" id="webcamBtn" class="btn btn-secondary">Use Webcam</button>
+                </form>
+            </div>
+        </div>
+        
+        <div class="webcam-container" id="webcamContainer">
+            <h5 class="mt-4">Webcam</h5>
+            <div class="webcam-wrapper">
+                <video id="webcam" autoplay playsinline></video>
+                <canvas id="canvas"></canvas>
+            </div>
+            <div class="mt-2">
+                <button id="captureBtn" class="btn btn-primary">Capture & Analyze</button>
+                <button id="stopWebcamBtn" class="btn btn-danger">Stop Webcam</button>
+            </div>
+        </div>
+        
+        <div class="results" id="results" style="display: none;">
+            <h4>Results</h4>
+            <div class="row">
+                <div class="col-md-6">
+                    <div class="image-box">
+                        <h5>Original Image</h5>
+                        <img id="originalImage" src="" alt="Original Image">
+                    </div>
+                </div>
+                <div class="col-md-6">
+                    <div class="image-box">
+                        <h5>Processed Image</h5>
+                        <img id="processedImage" src="" alt="Processed Image">
+                    </div>
+                </div>
+            </div>
+            
+            <div class="card mt-3">
+                <div class="card-header">
+                    Detection Details
+                </div>
+                <div class="card-body">
+                    <table class="table" id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>Face #</th>
+                                <th>Gender</th>
+                                <th>Age Group</th>
+                                <th>Position</th>
+                            </tr>
+                        </thead>
+                        <tbody></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        document.addEventListener('DOMContentLoaded', function() {
+            const uploadForm = document.getElementById('uploadForm');
+            const fileInput = document.getElementById('fileInput');
+            const webcamBtn = document.getElementById('webcamBtn');
+            const webcamContainer = document.getElementById('webcamContainer');
+            const webcam = document.getElementById('webcam');
+            const canvas = document.getElementById('canvas');
+            const captureBtn = document.getElementById('captureBtn');
+            const stopWebcamBtn = document.getElementById('stopWebcamBtn');
+            const resultsDiv = document.getElementById('results');
+            const resultsTable = document.getElementById('resultsTable').querySelector('tbody');
+            const originalImage = document.getElementById('originalImage');
+            const processedImage = document.getElementById('processedImage');
+            
+            let stream = null;
+            
+            // Handle file upload
+            uploadForm.addEventListener('submit', function(e) {
+                e.preventDefault();
+                
+                if (fileInput.files.length === 0) {
+                    alert('Please select an image file');
+                    return;
+                }
+                
+                const formData = new FormData();
+                formData.append('file', fileInput.files[0]);
+                
+                fetch('/predict', {
+                    method: 'POST',
+                    body: formData
+                })
+                .then(response => response.json())
+                .then(data => {
+                    if (data.error) {
+                        alert(data.error);
+                        return;
+                    }
+                    
+                    // Display results
+                    originalImage.src = `/static/uploads/${data.original_image}`;
+                    processedImage.src = `/static/uploads/${data.processed_image}`;
+                    
+                    // Populate results table
+                    resultsTable.innerHTML = '';
+                    data.results.forEach((result, index) => {
+                        const row = document.createElement('tr');
+                        row.innerHTML = `
+                            <td>${index + 1}</td>
+                            <td>${result.gender}</td>
+                            <td>${result.age}</td>
+                            <td>(${result.box[0]}, ${result.box[1]}) to (${result.box[2]}, ${result.box[3]})</td>
+                        `;
+                        resultsTable.appendChild(row);
+                    });
+                    
+                    resultsDiv.style.display = 'block';
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('An error occurred while processing the image');
+                });
+            });
+            
+            // Webcam functionality
+            webcamBtn.addEventListener('click', function() {
+                if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+                    navigator.mediaDevices.getUserMedia({ video: true })
+                        .then(function(mediaStream) {
+                            stream = mediaStream;
+                            webcam.srcObject = mediaStream;
+                            webcamContainer.style.display = 'block';
+                            
+                            // Set canvas size to match video
+                            webcam.onloadedmetadata = function() {
+                                canvas.width = webcam.videoWidth;
+                                canvas.height = webcam.videoHeight;
+                            };
+                        })
+                        .catch(function(error) {
+                            console.error('Error accessing webcam:', error);
+                            alert('Could not access webcam: ' + error.message);
+                        });
+                } else {
+                    alert('Webcam access not supported in this browser');
+                }
+            });
+            
+            // Capture image from webcam
+            captureBtn.addEventListener('click', function() {
+                if (!stream) {
+                    alert('Please start webcam first');
+                    return;
+                }
+                
+                const context = canvas.getContext('2d');
+                context.drawImage(webcam, 0, 0, canvas.width, canvas.height);
+                
+                // Convert canvas to blob and send to server
+                canvas.toBlob(function(blob) {
+                    const formData = new FormData();
+                    formData.append('file', blob, 'webcam_capture.jpg');
+                    
+                    fetch('/predict', {
+                        method: 'POST',
+                        body: formData
+                    })
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.error) {
+                            alert(data.error);
+                            return;
+                        }
+                        
+                        // Display results
+                        originalImage.src = `/static/uploads/${data.original_image}`;
+                        processedImage.src = `/static/uploads/${data.processed_image}`;
+                        
+                        // Populate results table
+                        resultsTable.innerHTML = '';
+                        data.results.forEach((result, index) => {
+                            const row = document.createElement('tr');
+                            row.innerHTML = `
+                                <td>${index + 1}</td>
+                                <td>${result.gender}</td>
+                                <td>${result.age}</td>
+                                <td>(${result.box[0]}, ${result.box[1]}) to (${result.box[2]}, ${result.box[3]})</td>
+                            `;
+                            resultsTable.appendChild(row);
+                        });
+                        
+                        resultsDiv.style.display = 'block';
+                    })
+                    .catch(error => {
+                        console.error('Error:', error);
+                        alert('An error occurred while processing the image');
+                    });
+                }, 'image/jpeg', 0.9);
+            });
+            
+            // Stop webcam
+            stopWebcamBtn.addEventListener('click', function() {
+                if (stream) {
+                    stream.getTracks().forEach(track => track.stop());
+                    webcam.srcObject = null;
+                    stream = null;
+                    webcamContainer.style.display = 'none';
+                }
+            });
+        });
+    </script>
+</body>
+</html>
