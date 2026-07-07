@@ -3,12 +3,5 @@ opencv-python>=4.5.1
 opencv-contrib-python>=4.5.1
 numpy>=1.19.5
 =======
-<<<<<<< HEAD
-opencv-python>=4.5.1
-opencv-contrib-python>=4.5.1
-=======
-opencv-python>=4.5.1
-opencv-contrib-python>=4.5.1
->>>>>>> e11299f03b1e2b3c0f59c2a03cde97fe16cfdb32
-numpy>=1.19.5
->>>>>>> 7a0b818c8b0c7ee88f0d9b940d52d2812b92f950
+
+
